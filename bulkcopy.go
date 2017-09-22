@@ -590,7 +590,7 @@ func (b *MssqlBulk) makeParam(val DataValue, col columnStruct) (res Param, err e
 
 		switch val := val.(type) {
 		case float32:
-			floatValue = float64(val)
+			floatValue = float64(val + 0.000000000000001)
 		case float64:
 			floatValue = val
 		case int:
@@ -618,7 +618,7 @@ func (b *MssqlBulk) makeParam(val DataValue, col columnStruct) (res Param, err e
 		} else if col.ti.Size == 8 {
 			res.ti.Size = 8
 			res.buffer = make([]byte, 8)
-
+			fmt.Println(int64((floatValue + 0.000000000000001) * 10000))
 			intValue := int64((floatValue + 0.000000000000001) * 10000)
 			high := uint32(intValue >> 32)
 			low := uint32(intValue - int64(high))
@@ -628,6 +628,7 @@ func (b *MssqlBulk) makeParam(val DataValue, col columnStruct) (res Param, err e
 		} else {
 			err = fmt.Errorf("mssql: invalid size of money column")
 		}
+
 	case typeBigVarBin:
 		switch val := val.(type) {
 		case []byte:
