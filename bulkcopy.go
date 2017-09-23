@@ -590,7 +590,7 @@ func (b *MssqlBulk) makeParam(val DataValue, col columnStruct) (res Param, err e
 
 		switch val := val.(type) {
 		case float32:
-			floatValue = float64(val + 0.000000000000001)
+			floatValue = float64(val)
 		case float64:
 			floatValue = val
 		case int:

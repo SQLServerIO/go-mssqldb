@@ -52,8 +52,8 @@ func TestBulkcopy(t *testing.T) {
 		{"test_bigint", 9223372036854775807},
 		{"test_bigintn", nil},
 		{"test_geom", geom},
-		// {"test_smallmoney", 1234.56},
-		// {"test_money", 1234.56},
+		{"test_smallmoney", 214748.3647},
+		{"test_money", 922337203685477.5807},
 		{"test_decimal_18_0", 1234.0001},
 		{"test_decimal_9_2", 1234.560001},
 		{"test_decimal_20_0", 1234.0001},
@@ -74,7 +74,7 @@ func TestBulkcopy(t *testing.T) {
 	defer conn.Close()
 
 	err := setupTable(conn, tableName)
-	if (err != nil) {
+	if err != nil {
 		t.Error("Setup table failed: ", err.Error())
 		return
 	}
