@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"math/big"
 	"reflect"
 	"strings"
 	"time"
@@ -586,42 +587,116 @@ func (b *MssqlBulk) makeParam(val DataValue, col columnStruct) (res Param, err e
 		res.buffer = buf
 
 	case typeMoney, typeMoney4, typeMoneyN:
-		var floatValue float64
-
-		switch val := val.(type) {
-		case float32:
-			floatValue = float64(val)
-		case float64:
-			floatValue = val
-		case int:
-			floatValue = float64(val)
-		case int64:
-			floatValue = float64(val)
-		case string:
-			floatValue, err = strconv.ParseFloat(val, 64)
-			if err != nil {
-				err = fmt.Errorf("mssql: invalid string for money column: %s", val)
-				return
-			}
-		default:
-			err = fmt.Errorf("mssql: invalid type for money column: %s", val)
-			return
-		}
+		var value float64
+		// switch v := val.(type) {
+		// case int:
+		// 	value = float64(v)
+		// case int8:
+		// 	value = float64(v)
+		// case int16:
+		// 	value = float64(v)
+		// case int32:
+		// 	value = float64(v)
+		// case int64:
+		// 	value = float64(v)
+		// case float32:
+		// 	value = float64(v)
+		// case float64:
+		// 	value = v
+		// case string:
+		// 	value, err = strconv.ParseFloat(v, 64)
+		// 	if err != nil {
+		// 		err = fmt.Errorf("mssql: invalid string for money column: %s", v)
+		// 		return
+		// 	}
+		// default:
+		// 	err = fmt.Errorf("mssql: invalid type for money column: %s", v)
+		// 	return
+		// }
 
 		if col.ti.Size == 4 {
 			res.ti.Size = 4
 			res.buffer = make([]byte, 4)
-
-			intValue := int64((floatValue + 0.000000000000001) * 10000)
-			i32 := uint32(intValue)
+			var i32 uint32
+			switch v := val.(type) {
+			case string:
+				if strings.Contains(v, ".") {
+					pointLoc := strings.Index(v, ".")
+					intStr := strings.Split(v, ".")
+					i64, _ := strconv.ParseInt((intStr[0] + intStr[1]), 10, 64)
+					var i, e = big.NewInt(10), big.NewInt(int64((pointLoc)))
+					i.Exp(i, e, nil)
+					i64 = i64 * i.Int64()
+					i32 = uint32(i64 * 10 * int64(pointLoc))
+				}
+			}
 			binary.LittleEndian.PutUint32(res.buffer, i32)
 		} else if col.ti.Size == 8 {
 			res.ti.Size = 8
 			res.buffer = make([]byte, 8)
-			fmt.Println(int64((floatValue + 0.000000000000001) * 10000))
-			intValue := int64((floatValue + 0.000000000000001) * 10000)
-			high := uint32(intValue >> 32)
-			low := uint32(intValue - int64(high))
+			var high uint32
+			var low uint32
+			switch v := val.(type) {
+			case int:
+				value = float64(v)
+				intValue := int64((value + 0.000000000000001) * 10000)
+				high = uint32(intValue >> 32)
+				low = uint32(intValue - int64(high))
+			case int8:
+				value = float64(v)
+				intValue := int64((value + 0.000000000000001) * 10000)
+				high = uint32(intValue >> 32)
+				low = uint32(intValue - int64(high))
+			case int16:
+				value = float64(v)
+				intValue := int64((value + 0.000000000000001) * 10000)
+				high = uint32(intValue >> 32)
+				low = uint32(intValue - int64(high))
+			case int32:
+				value = float64(v)
+				intValue := int64((value + 0.000000000000001) * 10000)
+				high = uint32(intValue >> 32)
+				low = uint32(intValue - int64(high))
+			case int64:
+				value = float64(v)
+				intValue := int64((value + 0.000000000000001) * 10000)
+				high = uint32(intValue >> 32)
+				low = uint32(intValue - int64(high))
+
+			case string:
+				var intValue int64
+				if strings.Contains(v, ".") {
+					intStr := strings.Split(v, ".")
+
+					bnoden := intStr[1]
+					if len(intStr[1]) > 4 {
+						intStr[1] = bnoden[0:4]
+					}
+					if len(intStr[1]) == 1 {
+						intStr[1] = intStr[1] + "0"
+					}
+					if len(intStr[1]) == 3 {
+						intStr[1] = intStr[1] + "0"
+					}
+
+					i64, _ := strconv.ParseInt((intStr[0] + intStr[1]), 10, 64)
+
+					if len(intStr[1]) == 2 {
+						intValue = i64 * 100
+					}
+					if len(intStr[1]) == 4 {
+						intValue = i64
+					}
+
+					high = uint32(intValue >> 32)
+					low = uint32(intValue - int64(high))
+				} else {
+					value, _ = strconv.ParseFloat(v, 64)
+					intValue := int64((value + 0.000000000000001) * 10000)
+					high = uint32(intValue >> 32)
+					low = uint32(intValue - int64(high))
+				}
+			}
 
 			binary.LittleEndian.PutUint32(res.buffer[0:4], high)
 			binary.LittleEndian.PutUint32(res.buffer[4:8], low)
