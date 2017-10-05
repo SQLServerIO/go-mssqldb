@@ -8,14 +8,14 @@ import (
 
 type copyin struct {
 	cn       *MssqlConn
-	bulkcopy *MssqlBulk
+	bulkcopy *BulkInsert
 	closed   bool
 }
 
 type SerializableBulkConfig struct {
 	TableName   string
 	ColumnsName []string
-	Options     MssqlBulkOptions
+	Options     BulkInsertOptions
 }
 
 func (d *MssqlDriver) OpenConnection(dsn string) (*MssqlConn, error) {
@@ -42,7 +42,7 @@ func (c *MssqlConn) prepareCopyIn(query string) (_ driver.Stmt, err error) {
 	return ci, nil
 }
 
-func CopyIn(table string, options MssqlBulkOptions, columns ...string) string {
+func CopyIn(table string, options BulkInsertOptions, columns ...string) string {
 	bulkconfig := &SerializableBulkConfig{TableName: table, Options: options, ColumnsName: columns}
 
 	config_json, err := json.Marshal(bulkconfig)

@@ -15,7 +15,8 @@ import (
 	"golang.org/x/net/context" // use the "x/net/context" for backwards compatibility.
 )
 
-type MssqlBulk struct {
+// BulkInsert ...
+type BulkInsert struct {
 	cn          *MssqlConn
 	metadata    []columnStruct
 	bulkColumns []columnStruct
@@ -24,10 +25,12 @@ type MssqlBulk struct {
 	numRows     int
 
 	headerSent bool
-	Options    MssqlBulkOptions
+	Options    BulkInsertOptions
 	Debug      bool
 }
-type MssqlBulkOptions struct {
+
+//BulkInsertOptions ...
+type BulkInsertOptions struct {
 	CheckConstraints  bool
 	FireTriggers      bool
 	KeepNulls         bool
@@ -37,15 +40,17 @@ type MssqlBulkOptions struct {
 	Tablock           bool
 }
 
+// DataValue ...
 type DataValue interface{}
 
-func (cn *MssqlConn) CreateBulk(table string, columns []string) (_ *MssqlBulk) {
-	b := MssqlBulk{cn: cn, tablename: table, headerSent: false, columnsName: columns}
+// CreateBulk ...
+func (cn *MssqlConn) CreateBulk(table string, columns []string) (_ *BulkInsert) {
+	b := BulkInsert{cn: cn, tablename: table, headerSent: false, columnsName: columns}
 	b.Debug = false
 	return &b
 }
 
-func (b *MssqlBulk) sendBulkCommand() (err error) {
+func (b *BulkInsert) sendBulkCommand() (err error) {
 	//get table columns info
 	err = b.getMetadata()
 	if err != nil {
@@ -78,44 +83,44 @@ func (b *MssqlBulk) sendBulkCommand() (err error) {
 	//create the bulk command
 
 	//columns definitions
-	var col_defs bytes.Buffer
+	var colDefs bytes.Buffer
 	for i, col := range b.bulkColumns {
 		if i != 0 {
-			col_defs.WriteString(", ")
+			colDefs.WriteString(", ")
 		}
-		col_defs.WriteString("[" + col.ColName + "] " + makeDecl(col.ti))
+		colDefs.WriteString("[" + col.ColName + "] " + makeDecl(col.ti))
 	}
 
 	//options
-	var with_opts []string
+	var withOpts []string
 
 	if b.Options.CheckConstraints {
-		with_opts = append(with_opts, "CHECK_CONSTRAINTS")
+		withOpts = append(withOpts, "CHECK_CONSTRAINTS")
 	}
 	if b.Options.FireTriggers {
-		with_opts = append(with_opts, "FIRE_TRIGGERS")
+		withOpts = append(withOpts, "FIRE_TRIGGERS")
 	}
 	if b.Options.KeepNulls {
-		with_opts = append(with_opts, "KEEP_NULLS")
+		withOpts = append(withOpts, "KEEP_NULLS")
 	}
 	if b.Options.KilobytesPerBatch > 0 {
-		with_opts = append(with_opts, fmt.Sprintf("KILOBYTES_PER_BATCH = %d", b.Options.KilobytesPerBatch))
+		withOpts = append(withOpts, fmt.Sprintf("KILOBYTES_PER_BATCH = %d", b.Options.KilobytesPerBatch))
 	}
 	if b.Options.RowsPerBatch > 0 {
-		with_opts = append(with_opts, fmt.Sprintf("ROWS_PER_BATCH = %d", b.Options.RowsPerBatch))
+		withOpts = append(withOpts, fmt.Sprintf("ROWS_PER_BATCH = %d", b.Options.RowsPerBatch))
 	}
 	if len(b.Options.Order) > 0 {
-		with_opts = append(with_opts, fmt.Sprintf("ORDER(%s)", strings.Join(b.Options.Order, ",")))
+		withOpts = append(withOpts, fmt.Sprintf("ORDER(%s)", strings.Join(b.Options.Order, ",")))
 	}
 	if b.Options.Tablock {
-		with_opts = append(with_opts, "TABLOCK")
+		withOpts = append(withOpts, "TABLOCK")
 	}
-	var with_part string
-	if len(with_opts) > 0 {
-		with_part = fmt.Sprintf("WITH (%s)", strings.Join(with_opts, ","))
+	var withPart string
+	if len(withOpts) > 0 {
+		withPart = fmt.Sprintf("WITH (%s)", strings.Join(withOpts, ","))
 	}
 
-	query := fmt.Sprintf("INSERT BULK %s (%s) %s", b.tablename, col_defs.String(), with_part)
+	query := fmt.Sprintf("INSERT BULK %s (%s) %s", b.tablename, colDefs.String(), withPart)
 
 	stmt, err := b.cn.Prepare(query)
 	if err != nil {
@@ -142,7 +147,7 @@ func (b *MssqlBulk) sendBulkCommand() (err error) {
 
 // AddRow immediately writes the row to the destination table.
 // The arguments are the row values in the order they were specified.
-func (b *MssqlBulk) AddRow(row []interface{}) (err error) {
+func (b *BulkInsert) AddRow(row []interface{}) (err error) {
 	if !b.headerSent {
 		err = b.sendBulkCommand()
 		if err != nil {
@@ -169,7 +174,7 @@ func (b *MssqlBulk) AddRow(row []interface{}) (err error) {
 	return
 }
 
-func (b *MssqlBulk) makeRowData(row []interface{}) ([]byte, error) {
+func (b *BulkInsert) makeRowData(row []interface{}) ([]byte, error) {
 	buf := new(bytes.Buffer)
 	buf.WriteByte(byte(tokenRow))
 
@@ -199,24 +204,45 @@ func (b *MssqlBulk) makeRowData(row []interface{}) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (b *MssqlBulk) Done() (rowcount int64, err error) {
-	if b.headerSent == false {
+// Done ...
+func (b *BulkInsert) Done() (rowcount int64, err error) {
+	if !b.headerSent {
 		//no rows had been sent
 		return 0, nil
 	}
 	var buf = b.cn.sess.buf
-	buf.WriteByte(byte(tokenDone))
-
-	binary.Write(buf, binary.LittleEndian, uint16(doneFinal))
-	binary.Write(buf, binary.LittleEndian, uint16(0)) //     curcmd
-
-	if b.cn.sess.loginAck.TDSVersion >= verTDS72 {
-		binary.Write(buf, binary.LittleEndian, uint64(0)) //rowcount 0
-	} else {
-		binary.Write(buf, binary.LittleEndian, uint32(0)) //rowcount 0
+	er := buf.WriteByte(byte(tokenDone))
+	if er != nil {
+		return 0, er
 	}
 
-	buf.FinishPacket()
+	er = binary.Write(buf, binary.LittleEndian, uint16(doneFinal))
+	if er != nil {
+		return 0, er
+	}
+
+	er = binary.Write(buf, binary.LittleEndian, uint16(0)) //     curcmd
+	if er != nil {
+		return 0, er
+	}
+
+	if b.cn.sess.loginAck.TDSVersion >= verTDS72 {
+		er = binary.Write(buf, binary.LittleEndian, uint64(0)) //rowcount 0
+		if er != nil {
+			return 0, er
+		}
+
+	} else {
+		er = binary.Write(buf, binary.LittleEndian, uint32(0)) //rowcount 0
+		if er != nil {
+			return 0, er
+		}
+	}
+
+	er = buf.FinishPacket()
+	if er != nil {
+		return 0, er
+	}
 
 	tokchan := make(chan tokenStruct, 5)
 	go processResponse(context.Background(), b.cn.sess, tokchan)
@@ -238,39 +264,61 @@ func (b *MssqlBulk) Done() (rowcount int64, err error) {
 	return rowCount, nil
 }
 
-func (b *MssqlBulk) createColMetadata() []byte {
+func (b *BulkInsert) createColMetadata() []byte {
 	buf := new(bytes.Buffer)
-	buf.WriteByte(byte(tokenColMetadata))                              // token
-	binary.Write(buf, binary.LittleEndian, uint16(len(b.bulkColumns))) // column count
+	buf.WriteByte(byte(tokenColMetadata))                                    // token
+	er := binary.Write(buf, binary.LittleEndian, uint16(len(b.bulkColumns))) // column count
+	if er != nil {
+		return nil
+	}
 
 	for i, col := range b.bulkColumns {
 
 		if b.cn.sess.loginAck.TDSVersion >= verTDS72 {
-			binary.Write(buf, binary.LittleEndian, uint32(col.UserType)) //  usertype, always 0?
+			er = binary.Write(buf, binary.LittleEndian, col.UserType) //  usertype, always 0?
+			if er != nil {
+				return nil
+			}
 		} else {
-			binary.Write(buf, binary.LittleEndian, uint16(col.UserType))
-		}
-		binary.Write(buf, binary.LittleEndian, uint16(col.Flags))
+			er = binary.Write(buf, binary.LittleEndian, uint16(col.UserType))
+			if er != nil {
+				return nil
+			}
 
-		writeTypeInfo(buf, &b.bulkColumns[i].ti)
+		}
+		er = binary.Write(buf, binary.LittleEndian, col.Flags)
+		if er != nil {
+			return nil
+		}
+
+		er = writeTypeInfo(buf, &b.bulkColumns[i].ti)
+		if er != nil {
+			return nil
+		}
 
 		if col.ti.TypeId == typeNText ||
 			col.ti.TypeId == typeText ||
 			col.ti.TypeId == typeImage {
 
-			tablename_ucs2 := str2ucs2(b.tablename)
-			binary.Write(buf, binary.LittleEndian, uint16(len(tablename_ucs2)/2))
-			buf.Write(tablename_ucs2)
+			tablenameUcs2 := str2ucs2(b.tablename)
+			er = binary.Write(buf, binary.LittleEndian, uint16(len(tablenameUcs2)/2))
+			if er != nil {
+				return nil
+			}
+			_, er = buf.Write(tablenameUcs2)
+			if er != nil {
+				return nil
+			}
 		}
-		colname_ucs2 := str2ucs2(col.ColName)
-		buf.WriteByte(uint8(len(colname_ucs2) / 2))
-		buf.Write(colname_ucs2)
+		colnameUcs2 := str2ucs2(col.ColName)
+		buf.WriteByte(uint8(len(colnameUcs2) / 2))
+		buf.Write(colnameUcs2)
 	}
 
 	return buf.Bytes()
 }
 
-func (b *MssqlBulk) getMetadata() (err error) {
+func (b *BulkInsert) getMetadata() (err error) {
 	stmt, err := b.cn.Prepare("SET FMTONLY ON")
 	if err != nil {
 		return
@@ -287,7 +335,7 @@ func (b *MssqlBulk) getMetadata() (err error) {
 		return
 	}
 	stmt2 := stmt.(*MssqlStmt)
-	cols, err := stmt2.QueryMeta()
+	cols, err := stmt2.queryMeta()
 	if err != nil {
 		return fmt.Errorf("get columns info failed: %v", err.Error())
 	}
@@ -304,8 +352,8 @@ func (b *MssqlBulk) getMetadata() (err error) {
 	return nil
 }
 
-// QueryMeta is almost the same as MssqlStmt.Query, but returns all the columns info.
-func (s *MssqlStmt) QueryMeta() (cols []columnStruct, err error) {
+// queryMeta is almost the same as MssqlStmt.Query, but returns all the columns info.
+func (s *MssqlStmt) queryMeta() (cols []columnStruct, err error) {
 	if err = s.sendQuery(nil); err != nil {
 		return
 	}
@@ -326,7 +374,7 @@ loop:
 	return cols, nil
 }
 
-func (b *MssqlBulk) makeParam(val DataValue, col columnStruct) (res Param, err error) {
+func (b *BulkInsert) makeParam(val DataValue, col columnStruct) (res Param, err error) {
 	res.ti.Size = col.ti.Size
 	res.ti.TypeId = col.ti.TypeId
 
@@ -505,7 +553,7 @@ func (b *MssqlBulk) makeParam(val DataValue, col columnStruct) (res Param, err e
 				days := divFloor(val.Unix(), 24*60*60)
 				//25567 - number of days since Jan 1 1900 UTC to Jan 1 1970
 				days = days + 25567
-				tm := (val.Hour()*60*60+val.Minute()*60+val.Second())*300 + int(val.Nanosecond()/10000000*3)
+				tm := (val.Hour()*60*60+val.Minute()*60+val.Second())*300 + (val.Nanosecond() / 10000000 * 3)
 
 				binary.LittleEndian.PutUint32(res.buffer[0:4], uint32(days))
 				binary.LittleEndian.PutUint32(res.buffer[4:8], uint32(tm))
@@ -517,7 +565,8 @@ func (b *MssqlBulk) makeParam(val DataValue, col columnStruct) (res Param, err e
 			err = fmt.Errorf("mssql: invalid type for datetime column: %s", val)
 		}
 
-	// case typeMoney, typeMoney4, typeMoneyN:
+	// BUG: Casting everything to float can cause a loss of precision
+	// and cause unexpected results to be inserted into your table
 	case typeDecimal, typeDecimalN, typeNumeric, typeNumericN:
 		var value float64
 		switch v := val.(type) {
@@ -721,7 +770,7 @@ func (b *MssqlBulk) makeParam(val DataValue, col columnStruct) (res Param, err e
 
 }
 
-func (b *MssqlBulk) dlogf(format string, v ...interface{}) {
+func (b *BulkInsert) dlogf(format string, v ...interface{}) {
 	if b.Debug {
 		b.cn.sess.log.Printf(format, v...)
 	}

@@ -11,13 +11,13 @@ import (
 
 func TestBatchSplit(t *testing.T) {
 	type testItem struct {
-		Sql    string
+		SQL    string
 		Expect []string
 	}
 
 	list := []testItem{
 		testItem{
-			Sql: `use DB
+			SQL: `use DB
 go
 select 1
 go
@@ -32,7 +32,7 @@ select 2
 			},
 		},
 		testItem{
-			Sql: `go
+			SQL: `go
 use DB go
 `,
 			Expect: []string{`
@@ -41,7 +41,7 @@ use DB go
 			},
 		},
 		testItem{
-			Sql: `select 'It''s go time'
+			SQL: `select 'It''s go time'
 go
 select top 1 1`,
 			Expect: []string{`select 'It''s go time'
@@ -50,7 +50,7 @@ select top 1 1`,
 			},
 		},
 		testItem{
-			Sql: `select 1 /* go */
+			SQL: `select 1 /* go */
 go
 select top 1 1`,
 			Expect: []string{`select 1 /* go */
@@ -59,7 +59,7 @@ select top 1 1`,
 			},
 		},
 		testItem{
-			Sql: `select 1 -- go
+			SQL: `select 1 -- go
 go
 select top 1 1`,
 			Expect: []string{`select 1 -- go
@@ -67,17 +67,17 @@ select top 1 1`,
 select top 1 1`,
 			},
 		},
-		testItem{Sql: `"0'"`, Expect: []string{`"0'"`}},
-		testItem{Sql: "0'", Expect: []string{"0'"}},
-		testItem{Sql: "--", Expect: []string{"--"}},
-		testItem{Sql: "GO", Expect: nil},
-		testItem{Sql: "/*", Expect: []string{"/*"}},
-		testItem{Sql: "gO\x01\x00O550655490663051008\n", Expect: []string{"\n"}},
-		testItem{Sql: "select 1;\nGO  2\nselect 2;", Expect: []string{"select 1;\n", "select 1;\n", "\nselect 2;"}},
-		testItem{Sql: "select 'hi\\\n-hello';", Expect: []string{"select 'hi-hello';"}},
-		testItem{Sql: "select 'hi\\\r\n-hello';", Expect: []string{"select 'hi-hello';"}},
-		testItem{Sql: "select 'hi\\\r-hello';", Expect: []string{"select 'hi-hello';"}},
-		testItem{Sql: "select 'hi\\\n\nhello';", Expect: []string{"select 'hi\nhello';"}},
+		testItem{SQL: `"0'"`, Expect: []string{`"0'"`}},
+		testItem{SQL: "0'", Expect: []string{"0'"}},
+		testItem{SQL: "--", Expect: []string{"--"}},
+		testItem{SQL: "GO", Expect: nil},
+		testItem{SQL: "/*", Expect: []string{"/*"}},
+		testItem{SQL: "gO\x01\x00O550655490663051008\n", Expect: []string{"\n"}},
+		testItem{SQL: "select 1;\nGO  2\nselect 2;", Expect: []string{"select 1;\n", "select 1;\n", "\nselect 2;"}},
+		testItem{SQL: "select 'hi\\\n-hello';", Expect: []string{"select 'hi-hello';"}},
+		testItem{SQL: "select 'hi\\\r\n-hello';", Expect: []string{"select 'hi-hello';"}},
+		testItem{SQL: "select 'hi\\\r-hello';", Expect: []string{"select 'hi-hello';"}},
+		testItem{SQL: "select 'hi\\\n\nhello';", Expect: []string{"select 'hi\nhello';"}},
 	}
 
 	index := -1
@@ -86,7 +86,7 @@ select top 1 1`,
 		if index >= 0 && index != i {
 			continue
 		}
-		sqltext := list[i].Sql
+		sqltext := list[i].SQL
 		t.Run(fmt.Sprintf("index-%d", i), func(t *testing.T) {
 			ss := Split(sqltext, "go")
 			if len(ss) != len(list[i].Expect) {
