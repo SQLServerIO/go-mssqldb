@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// bach splits a single script containing multiple batches separated by
+// Package batch splits a single script containing multiple batches separated by
 // a keyword into multiple scripts.
 package batch
 
@@ -22,7 +22,7 @@ func Split(sql, separator string) []string {
 		return []string{sql}
 	}
 	l := &lexer{
-		Sql: sql,
+		SQL: sql,
 		Sep: separator,
 		At:  0,
 	}
@@ -50,7 +50,7 @@ func hasPrefixFold(s, sep string) bool {
 }
 
 type lexer struct {
-	Sql   string
+	SQL   string
 	Sep   string
 	At    int
 	Start int
@@ -69,17 +69,17 @@ func (l *lexer) Add(b string) {
 
 func (l *lexer) Next() bool {
 	l.At++
-	return l.At < len(l.Sql)
+	return l.At < len(l.SQL)
 }
 
 func (l *lexer) AddCurrent(count int64) bool {
 	if count < 0 {
 		count = 0
 	}
-	if l.At >= len(l.Sql) {
-		l.At = len(l.Sql)
+	if l.At >= len(l.SQL) {
+		l.At = len(l.SQL)
 	}
-	text := l.Sql[l.Start:l.At]
+	text := l.SQL[l.Start:l.At]
 	if len(l.Skip) > 0 {
 		buf := &bytes.Buffer{}
 		nextSkipIndex := 0
@@ -106,7 +106,7 @@ func (l *lexer) AddCurrent(count int64) bool {
 	}
 	l.At += len(l.Sep)
 	l.Start = l.At
-	return (l.At < len(l.Sql))
+	return (l.At < len(l.SQL))
 }
 
 type stateFn func(*lexer) stateFn
@@ -119,10 +119,10 @@ const (
 
 func stateSep(l *lexer) stateFn {
 	printStateName("sep", l)
-	if l.At+len(l.Sep) >= len(l.Sql) {
+	if l.At+len(l.Sep) >= len(l.SQL) {
 		return nil
 	}
-	s := l.Sql[l.At+len(l.Sep):]
+	s := l.SQL[l.At+len(l.Sep):]
 
 	parseNumberStart := -1
 loop:
@@ -176,23 +176,23 @@ numLoop:
 func stateText(l *lexer) stateFn {
 	printStateName("text", l)
 	for {
-		ch := l.Sql[l.At]
+		ch := l.SQL[l.At]
 
 		switch {
-		case strings.HasPrefix(l.Sql[l.At:], lineComment):
+		case strings.HasPrefix(l.SQL[l.At:], lineComment):
 			l.At += len(lineComment)
 			return stateLineComment
-		case strings.HasPrefix(l.Sql[l.At:], leftComment):
+		case strings.HasPrefix(l.SQL[l.At:], leftComment):
 			l.At += len(leftComment)
 			return stateMultiComment
 		case ch == '\'':
-			l.At += 1
+			l.At++
 			return stateString
 		case ch == '\r', ch == '\n':
-			l.At += 1
+			l.At++
 			return stateWhitespace
 		default:
-			if l.Next() == false {
+			if !l.Next() {
 				return nil
 			}
 		}
@@ -201,16 +201,16 @@ func stateText(l *lexer) stateFn {
 
 func stateWhitespace(l *lexer) stateFn {
 	printStateName("whitespace", l)
-	if l.At >= len(l.Sql) {
+	if l.At >= len(l.SQL) {
 		return nil
 	}
-	ch := l.Sql[l.At]
+	ch := l.SQL[l.At]
 
 	switch {
 	case unicode.IsSpace(rune(ch)):
-		l.At += 1
+		l.At++
 		return stateWhitespace
-	case hasPrefixFold(l.Sql[l.At:], l.Sep):
+	case hasPrefixFold(l.SQL[l.At:], l.Sep):
 		return stateSep
 	default:
 		return stateText
@@ -220,17 +220,17 @@ func stateWhitespace(l *lexer) stateFn {
 func stateLineComment(l *lexer) stateFn {
 	printStateName("line-comment", l)
 	for {
-		if l.At >= len(l.Sql) {
+		if l.At >= len(l.SQL) {
 			return nil
 		}
-		ch := l.Sql[l.At]
+		ch := l.SQL[l.At]
 
 		switch {
 		case ch == '\r', ch == '\n':
-			l.At += 1
+			l.At++
 			return stateWhitespace
 		default:
-			if l.Next() == false {
+			if !l.Next() {
 				return nil
 			}
 		}
@@ -241,11 +241,11 @@ func stateMultiComment(l *lexer) stateFn {
 	printStateName("multi-line-comment", l)
 	for {
 		switch {
-		case strings.HasPrefix(l.Sql[l.At:], rightComment):
+		case strings.HasPrefix(l.SQL[l.At:], rightComment):
 			l.At += len(leftComment)
 			return stateWhitespace
 		default:
-			if l.Next() == false {
+			if !l.Next() {
 				return nil
 			}
 		}
@@ -255,20 +255,20 @@ func stateMultiComment(l *lexer) stateFn {
 func stateString(l *lexer) stateFn {
 	printStateName("string", l)
 	for {
-		if l.At >= len(l.Sql) {
+		if l.At >= len(l.SQL) {
 			return nil
 		}
-		ch := l.Sql[l.At]
+		ch := l.SQL[l.At]
 		chNext := rune(-1)
-		if l.At+1 < len(l.Sql) {
-			chNext = rune(l.Sql[l.At+1])
+		if l.At+1 < len(l.SQL) {
+			chNext = rune(l.SQL[l.At+1])
 		}
 
 		switch {
 		case ch == '\\' && (chNext == '\r' || chNext == '\n'):
 			next := 2
 			l.Skip = append(l.Skip, l.At, l.At+1)
-			if chNext == '\r' && l.At+2 < len(l.Sql) && l.Sql[l.At+2] == '\n' {
+			if chNext == '\r' && l.At+2 < len(l.SQL) && l.SQL[l.At+2] == '\n' {
 				l.Skip = append(l.Skip, l.At+2)
 				next = 3
 			}
@@ -276,10 +276,10 @@ func stateString(l *lexer) stateFn {
 		case ch == '\'' && chNext == '\'':
 			l.At += 2
 		case ch == '\'' && chNext != '\'':
-			l.At += 1
+			l.At++
 			return stateWhitespace
 		default:
-			if l.Next() == false {
+			if !l.Next() {
 				return nil
 			}
 		}
