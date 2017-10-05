@@ -10,12 +10,12 @@ import (
 )
 
 var (
-	debug         = flag.Bool("debug", true, "enable debugging")
-	password      = flag.String("password", "osmtest", "the database password")
-	port     *int = flag.Int("port", 1433, "the database port")
-	server        = flag.String("server", "localhost", "the database server")
-	user          = flag.String("user", "osmtest", "the database user")
-	database      = flag.String("database", "bulktest", "the database name")
+	debug    = flag.Bool("debug", true, "enable debugging")
+	password = flag.String("password", "osmtest", "the database password")
+	port     = flag.Int("port", 1433, "the database port")
+	server   = flag.String("server", "localhost", "the database server")
+	user     = flag.String("user", "osmtest", "the database user")
+	database = flag.String("database", "bulktest", "the database name")
 )
 
 /*
