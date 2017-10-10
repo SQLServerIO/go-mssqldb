@@ -387,7 +387,6 @@ func (b *BulkInsert) makeParam(val DataValue, col columnStruct) (res Param, err 
 
 	case typeInt1, typeInt2, typeInt4, typeInt8, typeIntN:
 		var intvalue int64
-
 		switch val := val.(type) {
 		case int:
 			intvalue = int64(val)
@@ -395,7 +394,10 @@ func (b *BulkInsert) makeParam(val DataValue, col columnStruct) (res Param, err 
 			intvalue = int64(val)
 		case int64:
 			intvalue = val
+		case string:
+			intvalue, _ = strconv.ParseInt(val, 0, 64)
 		default:
+			fmt.Println(reflect.TypeOf(val))
 			err = fmt.Errorf("mssql: invalid type for int column")
 			return
 		}
