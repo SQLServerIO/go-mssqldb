@@ -638,7 +638,6 @@ func (b *BulkInsert) makeParam(val DataValue, col columnStruct) (res Param, err 
 		res.buffer = buf
 
 	case typeMoney, typeMoney4, typeMoneyN:
-		var value float64
 		// switch v := val.(type) {
 		// case int:
 		// 	value = float64(v)
@@ -664,7 +663,7 @@ func (b *BulkInsert) makeParam(val DataValue, col columnStruct) (res Param, err 
 		// 	err = fmt.Errorf("mssql: invalid type for money column: %s", v)
 		// 	return
 		// }
-
+		var value float64
 		if col.ti.Size == 4 {
 			res.ti.Size = 4
 			res.buffer = make([]byte, 4)
